@@ -1,0 +1,33 @@
+/*
+ * MMM-YoLink CSS
+ * Version 1.0
+ */
+
+.yolink-wrapper .deviceName {
+  font-weight: bold;
+  padding-top: 10px;
+  border-bottom: 1px solid #444;
+}
+
+.yolink-wrapper .stateKey {
+  text-align: left;
+  padding-right: 15px;
+  color: #aaa; /* Lighter color for the key */
+}
+
+.yolink-wrapper .stateValue {
+  text-align: right;
+}
+
+.yolink-wrapper .state-open {
+    color: #f86573; /* A reddish color for "Open" */
+}
+
+.yolink-wrapper .state-closed {
+    color: #84f284; /* A greenish color for "Closed" */
+}
+
+.yolink-wrapper .error {
+  color: #ff8c8c; /* Red for error messages */
+  text-align: center;
+}

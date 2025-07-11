@@ -1,0 +1,11 @@
+{
+  "name": "mmm-yolink",
+  "version": "1.0.0",
+  "description": "A MagicMirror module to display YoLink sensor data.",
+  "main": "MMM-YoLink.js",
+  "author": "Gemini",
+  "license": "MIT",
+  "dependencies": {
+    "node-fetch": "^3.3.2"
+  }
+}
