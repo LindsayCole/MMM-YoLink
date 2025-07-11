@@ -56,9 +56,11 @@ Add the module to your `~/MagicMirror/config/config.js` file. Here is a sample c
         uaid: "your_uaid_from_the_app",
         secretKey: "your_secretKey_from_the_app",
 
-        // --- Layout ---
-        staticDeviceId: null, // Set a device ID here to make it always visible.
+        // --- Layout & Alerts ---
+        staticDeviceId: null, // Set a device ID here to make it always visible on the left.
         rotationInterval: 10 * 1000, // How often to rotate the other sensors (in ms).
+        hotTubDeviceId: null, // Set the ID of a temperature sensor to monitor for alerts.
+        hotTubTempDrop: 5, // Degrees C or F to trigger the flashing alert.
 
         // --- Filtering ---
         deviceIds: [], // Leave empty to show all compatible devices.
@@ -85,6 +87,8 @@ Add the module to your `~/MagicMirror/config/config.js` file. Here is a sample c
 | `secretKey`        | **Required.** Your Secret Key from the YoLink app.                                                                                       | `""`                                                         |
 | `staticDeviceId`   | Set the ID of a device here to make it always visible in its own column. The other devices will rotate in a second column.                | `null`                                                       |
 | `rotationInterval` | If using `staticDeviceId`, this sets how often the second column rotates to the next sensor, in milliseconds.                          | `10000` (10 seconds)                                         |
+| `hotTubDeviceId`   | Set the ID of a temperature sensor to monitor. If its temperature drops by `hotTubTempDrop`, its name will flash and the temp will turn red. | `null`                                                       |
+| `hotTubTempDrop`   | The number of degrees (C or F) the monitored sensor's temperature must drop between updates to trigger the visual alert.                   | `5`                                                          |
 | `deviceIds`        | An array of specific device ID strings you want to display. If you leave this empty, the module will try to show all compatible devices. | `[]`                                                         |
 | `showTypes`        | If `deviceIds` is empty, this will only show devices of the types you list here (e.g., "THSensor").                                        | `["THSensor", "LeakSensor", "DoorSensor", "MotionSensor"]`   |
 | `excludeIds`       | If `deviceIds` is empty, this lets you hide specific devices by their ID. Useful for hiding a Hub or a device you don't need to see.       | `[]`                                                         |
