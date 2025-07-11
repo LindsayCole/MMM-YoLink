@@ -2,39 +2,44 @@
  * Module: MMM-YoLink
  *
  * By Gemini
- * Version: 1.8
+ * Version: 1.10
  */
 
 Module.register("MMM-YoLink", {
     // --- MODULE DEFAULTS ---
     defaults: {
-        uaid: "", // YoLink User Access ID
-        secretKey: "", // YoLink Secret Key
-        deviceIds: [], // Optional. If empty, all compatible devices will be shown.
-        updateInterval: 5 * 60 * 1000, // 5 minutes in milliseconds
+        uaid: "",
+        secretKey: "",
+        deviceIds: [],
+        updateInterval: 5 * 60 * 1000,
         header: "YoLink Sensors",
-        tempUnit: "C", // "C" for Celsius, "F" for Fahrenheit
-        batteryThreshold: 25, // Show battery level if it is at or below this percentage.
-        showTypes: ["THSensor", "LeakSensor", "DoorSensor", "MotionSensor"], // Show devices of these types
-        excludeIds: [] // Hide specific devices by their ID
+        tempUnit: "C",
+        batteryThreshold: 25,
+        showTypes: ["THSensor", "LeakSensor", "DoorSensor", "MotionSensor"],
+        excludeIds: [],
+        staticDeviceId: null,
+        rotationInterval: 10 * 1000,
+        // --- ADD v1.10: Option for custom colors ---
+        deviceColors: {} // e.g., { "d88b4c040005efe3": "#ff0000" }
     },
 
     // --- MODULE STATE ---
     sensorData: {},
     error: null,
     isLoading: true,
+    rotatingDevices: [],
+    rotatingIndex: 0,
+    rotationTimer: null,
 
     // --- MODULE LIFECYCLE METHODS ---
     start: function() {
-        Log.info(`[${this.name}] v1.8: Starting module.`);
+        Log.info(`[${this.name}] v1.10: Starting module.`);
         if (!this.config.uaid || !this.config.secretKey) {
             this.error = "Configuration Error: Please set your uaid and secretKey.";
-            Log.error(`[${this.name}] ${this.error}`);
             this.updateDom();
             return;
         }
         this.sendSocketNotification("START_FETCH", this.config);
-        this.isLoading = true;
     },
 
     getStyles: function() {
@@ -45,6 +50,7 @@ Module.register("MMM-YoLink", {
         return this.config.header;
     },
 
+    // --- RENDER METHOD (getDom) ---
     getDom: function() {
         const wrapper = document.createElement("div");
         wrapper.className = "yolink-wrapper";
@@ -60,67 +66,87 @@ Module.register("MMM-YoLink", {
             return wrapper;
         }
 
+        const container = document.createElement("div");
+        container.className = "yolink-container";
+
+        // Find the static device
+        const staticDevice = this.sensorData[this.config.staticDeviceId];
+
+        if (staticDevice) {
+            const staticColumn = document.createElement("div");
+            staticColumn.className = "yolink-column";
+            staticColumn.appendChild(this.renderDevice(staticDevice));
+            container.appendChild(staticColumn);
+        }
+
+        // Render the rotating device if there are any
+        if (this.rotatingDevices.length > 0) {
+            const rotatingColumn = document.createElement("div");
+            rotatingColumn.className = "yolink-column";
+            const currentRotatingDevice = this.rotatingDevices[this.rotatingIndex];
+            if (currentRotatingDevice) {
+                rotatingColumn.appendChild(this.renderDevice(currentRotatingDevice));
+            }
+            container.appendChild(rotatingColumn);
+        }
+        
+        if (!staticDevice && this.rotatingDevices.length === 0) {
+             container.innerHTML = "No devices to display.";
+        }
+
+        wrapper.appendChild(container);
+        return wrapper;
+    },
+
+    /**
+     * @function renderDevice
+     * Renders a single device's data into a table.
+     * @param {object} device - The device object from the API.
+     * @returns {HTMLElement} A table element with the device's data.
+     */
+    renderDevice: function(device) {
         const table = document.createElement("table");
         table.className = "small";
 
-        let devicesToDisplay = Object.values(this.sensorData);
+        const nameRow = document.createElement("tr");
+        const nameCell = document.createElement("td");
+        nameCell.className = "deviceName";
+        nameCell.colSpan = 2;
+        nameCell.innerHTML = device.name;
+        
+        // *** ADD v1.10: Apply custom color if specified in config ***
+        if (this.config.deviceColors[device.deviceId]) {
+            nameCell.style.color = this.config.deviceColors[device.deviceId];
+        }
+        
+        nameRow.appendChild(nameCell);
+        table.appendChild(nameRow);
 
-        // 1. Filter by type
-        if (this.config.showTypes && this.config.showTypes.length > 0) {
-            devicesToDisplay = devicesToDisplay.filter(device => this.config.showTypes.includes(device.type));
+        if (device.data && device.data.online === false) {
+            this.addStatusRow(table, "Offline");
+            return table;
         }
 
-        // 2. Filter by excluded IDs
-        if (this.config.excludeIds && this.config.excludeIds.length > 0) {
-            devicesToDisplay = devicesToDisplay.filter(device => !this.config.excludeIds.includes(device.deviceId));
-        }
+        const liveData = device.data ? device.data.state : null;
 
-        if (devicesToDisplay.length === 0) {
-            this.addStatusRow(table, "No devices to display.");
-        }
-
-        devicesToDisplay.forEach(device => {
-            const nameRow = document.createElement("tr");
-            const nameCell = document.createElement("td");
-            nameCell.className = "deviceName";
-            nameCell.colSpan = 2;
-            nameCell.innerHTML = device.name;
-            nameRow.appendChild(nameCell);
-            table.appendChild(nameRow);
-
-            if (device.data && device.data.online === false) {
-                this.addStatusRow(table, "Offline");
-                return; 
+        if (liveData && typeof liveData === 'object') {
+            this.addDataRow(table, 'Temperature', liveData.temperature);
+            if (device.modelName !== "YS8008-UC") {
+                this.addDataRow(table, 'Humidity', liveData.humidity);
             }
-
-            const liveData = device.data ? device.data.state : null;
-
-            if (liveData && typeof liveData === 'object') {
-                this.addDataRow(table, 'Temperature', liveData.temperature);
-
-                // *** ADD v1.8: Only show humidity if it's not the Floating Thermometer ***
-                if (device.modelName !== "YS8008-UC") {
-                    this.addDataRow(table, 'Humidity', liveData.humidity);
-                }
-                
-                // Handle general 'state' property for sensors like LeakSensor, DoorSensor
-                if (liveData.state && !liveData.temperature) {
-                    this.addDataRow(table, 'Status', liveData.state);
-                }
-
-                if (liveData.battery !== undefined && liveData.battery !== null) {
-                    const batteryPercentage = Math.min(parseInt(liveData.battery, 10) * 25, 100);
-                    if (batteryPercentage <= this.config.batteryThreshold) {
-                        this.addDataRow(table, 'Battery', liveData.battery);
-                    }
-                }
-            } else {
-                this.addStatusRow(table, "State not available");
+            if (liveData.state && !liveData.temperature) {
+                this.addDataRow(table, 'Status', liveData.state);
             }
-        });
-
-        wrapper.appendChild(table);
-        return wrapper;
+            if (liveData.battery !== undefined && liveData.battery !== null) {
+                const batteryPercentage = Math.min(parseInt(liveData.battery, 10) * 25, 100);
+                if (batteryPercentage <= this.config.batteryThreshold) {
+                    this.addDataRow(table, 'Battery', liveData.battery);
+                }
+            }
+        } else {
+            this.addStatusRow(table, "State not available");
+        }
+        return table;
     },
 
     // --- HELPER FUNCTIONS for getDom ---
@@ -154,11 +180,33 @@ Module.register("MMM-YoLink", {
             this.isLoading = false;
             this.error = null;
             this.sensorData = payload;
+
+            const allDevices = Object.values(this.sensorData);
+            this.rotatingDevices = allDevices.filter(device => 
+                device.deviceId !== this.config.staticDeviceId &&
+                this.config.showTypes.includes(device.type) &&
+                !this.config.excludeIds.includes(device.deviceId)
+            );
+
+            this.scheduleRotation();
             this.updateDom(500);
         } else if (notification === "FETCH_ERROR") {
             this.isLoading = false;
             this.error = payload.error;
             this.updateDom();
+        }
+    },
+    
+    // --- ROTATION LOGIC ---
+    scheduleRotation: function() {
+        if (this.rotationTimer) {
+            clearInterval(this.rotationTimer);
+        }
+        if (this.rotatingDevices.length > 1) {
+            this.rotationTimer = setInterval(() => {
+                this.rotatingIndex = (this.rotatingIndex + 1) % this.rotatingDevices.length;
+                this.updateDom(500);
+            }, this.config.rotationInterval);
         }
     },
 
