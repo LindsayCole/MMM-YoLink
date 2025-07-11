@@ -50,26 +50,29 @@ Add the module to your `~/MagicMirror/config/config.js` file. Here is a sample c
 {
     module: "MMM-YoLink",
     position: "top_left", // Or wherever you want it!
-    header: "YoLink Sensors",
+    // header: "YoLink Sensors", // This line is commented out to hide the header
     config: {
         // --- Required ---
         uaid: "your_uaid_from_the_app",
         secretKey: "your_secretKey_from_the_app",
 
-        // --- Filtering (Choose one method or let it run wild!) ---
-        // Option 1: Show specific devices (leave empty to show all)
-        deviceIds: [], 
-        
-        // Option 2: Show devices by type (if deviceIds is empty)
-        showTypes: ["THSensor", "LeakSensor", "DoorSensor", "MotionSensor"],
+        // --- Layout ---
+        staticDeviceId: null, // Set a device ID here to make it always visible.
+        rotationInterval: 10 * 1000, // How often to rotate the other sensors (in ms).
 
-        // Option 3: Hide specific devices (if deviceIds is empty)
+        // --- Filtering ---
+        deviceIds: [], // Leave empty to show all compatible devices.
+        showTypes: ["THSensor", "LeakSensor", "DoorSensor", "MotionSensor"],
         excludeIds: [],
 
-        // --- Customization (Optional) ---
+        // --- Customization ---
         tempUnit: "C", // "C" for Celsius, "F" for Fahrenheit
         batteryThreshold: 25, // Show battery level only if it's at or below this percentage.
-        updateInterval: 5 * 60 * 1000, // How often to fetch data (in ms). Default is 5 minutes.
+        updateInterval: 5 * 60 * 1000,
+        deviceColors: {
+            "d88b4c040005efe3": "#f5a623", // Example: Set a custom color for a specific device
+            "another_device_id": "lightblue"
+        }
     }
 },
 ```
@@ -80,12 +83,15 @@ Add the module to your `~/MagicMirror/config/config.js` file. Here is a sample c
 | :----------------- | :--------------------------------------------------------------------------------------------------------------------------------------- | :----------------------------------------------------------- |
 | `uaid`             | **Required.** Your User Access ID from the YoLink app.                                                                                   | `""`                                                         |
 | `secretKey`        | **Required.** Your Secret Key from the YoLink app.                                                                                       | `""`                                                         |
+| `staticDeviceId`   | Set the ID of a device here to make it always visible in its own column. The other devices will rotate in a second column.                | `null`                                                       |
+| `rotationInterval` | If using `staticDeviceId`, this sets how often the second column rotates to the next sensor, in milliseconds.                          | `10000` (10 seconds)                                         |
 | `deviceIds`        | An array of specific device ID strings you want to display. If you leave this empty, the module will try to show all compatible devices. | `[]`                                                         |
 | `showTypes`        | If `deviceIds` is empty, this will only show devices of the types you list here (e.g., "THSensor").                                        | `["THSensor", "LeakSensor", "DoorSensor", "MotionSensor"]`   |
 | `excludeIds`       | If `deviceIds` is empty, this lets you hide specific devices by their ID. Useful for hiding a Hub or a device you don't need to see.       | `[]`                                                         |
 | `tempUnit`         | The unit to display for temperature. Can be `"C"` or `"F"`.                                                                              | `"C"`                                                        |
 | `batteryThreshold` | The module will only display the battery level if it is at or below this percentage. Set to `100` to always show it.                      | `25`                                                         |
 | `updateInterval`   | How often the module should ask YoLink for new data, in milliseconds.                                                                    | `300000` (5 minutes)                                         |
+| `deviceColors`     | An object that maps a `deviceId` to a color (e.g., `#ffffff`, `orange`). This will change the color of the device name.                   | `{}`                                                         |
 
 ---
 
