@@ -20,7 +20,7 @@ Getting this module up and running is pretty straightforward.
 
 2.  **Clone the repository:**
     ```bash
-    git clone [https://github.com/LindsayCole/MMM-YoLink.git](https://github.com/LindsayCole/MMM-YoLink.git)
+    git clone https://github.com/LindsayCole/MMM-YoLink.git
     ```
 
 3.  **Install dependencies:**
