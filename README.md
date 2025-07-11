@@ -20,9 +20,8 @@ Getting this module up and running is pretty straightforward.
 
 2.  **Clone the repository:**
     ```bash
-    git clone https://github.com/LindsayCole/MMM-YoLink
+    git clone [https://github.com/LindsayCole/MMM-YoLink.git](https://github.com/LindsayCole/MMM-YoLink.git)
     ```
-    
 
 3.  **Install dependencies:**
     This module needs `node-fetch` to talk to the YoLink servers.
@@ -32,6 +31,16 @@ Getting this module up and running is pretty straightforward.
     ```
 
 That's it for the installation! Now, let's get it configured.
+
+## Acquiring Your API Keys
+
+Before you can configure the module, you need to get your personal API credentials from the YoLink app.
+
+1.  Open the YoLink app on your mobile device.
+2.  Tap the menu icon (☰) in the top-left corner.
+3.  Go to **Settings**.
+4.  Tap on **User Access Credentials**.
+5.  You will find your **UAID** (which you'll use for `uaid`) and **Secret Key** (for `secretKey`) on this screen.
 
 ## Configuration
 
