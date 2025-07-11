@@ -2,7 +2,7 @@
  * Module: MMM-YoLink
  *
  * By Gemini
- * Version: 1.19
+ * Version: 1.20
  */
 
 Module.register("MMM-YoLink", {
@@ -20,8 +20,7 @@ Module.register("MMM-YoLink", {
         rotationInterval: 10 * 1000,
         deviceColors: {},
         hotTubDeviceId: null,
-        hotTubTempDrop: 5,
-        debug: false // Set to true in config to show diagnostic info
+        hotTubTempDrop: 5
     },
 
     // --- MODULE STATE ---
@@ -32,10 +31,13 @@ Module.register("MMM-YoLink", {
     rotatingIndex: 0,
     rotationTimer: null,
     previousTemperatures: {},
+    // --- ADD v1.20: Persistent DOM elements for smooth updates ---
+    staticColumn: null,
+    rotatingColumn: null,
 
     // --- MODULE LIFECYCLE METHODS ---
     start: function() {
-        Log.info(`[${this.name}] v1.19: Starting module.`);
+        Log.info(`[${this.name}] v1.20: Starting module.`);
         if (!this.config.uaid || !this.config.secretKey) {
             this.error = "Configuration Error: Please set your uaid and secretKey.";
             this.updateDom();
@@ -65,60 +67,28 @@ Module.register("MMM-YoLink", {
             return wrapper;
         }
 
+        // --- REWRITE v1.20: Create persistent columns on first run ---
         const container = document.createElement("div");
         container.className = "yolink-container";
         
-        const allDevices = Object.values(this.sensorData).filter(device => 
-            this.config.showTypes.includes(device.type) &&
-            !this.config.excludeIds.includes(device.deviceId)
-        );
-
-        const staticDevice = allDevices.find(d => d.deviceId === this.config.staticDeviceId);
-        this.rotatingDevices = allDevices.filter(d => d.deviceId !== this.config.staticDeviceId);
-
-        // --- ADD v1.19: Diagnostic Debug Mode ---
-        if (this.config.debug) {
-            const debugInfo = document.createElement("div");
-            debugInfo.style.textAlign = 'left';
-            debugInfo.style.border = '1px solid white';
-            debugInfo.style.padding = '5px';
-            debugInfo.style.marginBottom = '10px';
-            debugInfo.innerHTML = `
-                <p style="margin:0; padding:0;">--- MMM-YoLink Debug ---</p>
-                <p style="margin:0; padding:0;">Total devices in sensorData: ${Object.keys(this.sensorData).length}</p>
-                <p style="margin:0; padding:0;">Total devices after filtering: ${allDevices.length}</p>
-                <p style="margin:0; padding:0;">Static device found: ${staticDevice ? staticDevice.name : 'No'}</p>
-                <p style="margin:0; padding:0;">Rotating devices count: ${this.rotatingDevices.length}</p>
-                <p style="margin:0; padding:0;">Current rotating index: ${this.rotatingIndex}</p>
-            `;
-            wrapper.appendChild(debugInfo);
-        }
-
-        // Render the static column
-        if (staticDevice) {
-            const staticColumn = document.createElement("div");
-            staticColumn.className = "yolink-column yolink-static-column";
-            staticColumn.appendChild(this.renderDevice(staticDevice));
-            container.appendChild(staticColumn);
+        // Create the static column div if it doesn't exist
+        if (!this.staticColumn) {
+            this.staticColumn = document.createElement("div");
+            this.staticColumn.className = "yolink-column yolink-static-column";
         }
         
-        // Render the rotating column
-        if (this.rotatingDevices.length > 0) {
-            const rotatingColumn = document.createElement("div");
-            rotatingColumn.className = "yolink-column yolink-rotating-column";
-            if (this.rotatingIndex >= this.rotatingDevices.length) {
-                this.rotatingIndex = 0;
-            }
-            const currentRotatingDevice = this.rotatingDevices[this.rotatingIndex];
-            if (currentRotatingDevice) {
-                rotatingColumn.appendChild(this.renderDevice(currentRotatingDevice));
-            }
-            container.appendChild(rotatingColumn);
+        // Create the rotating column div if it doesn't exist
+        if (!this.rotatingColumn) {
+            this.rotatingColumn = document.createElement("div");
+            this.rotatingColumn.className = "yolink-column yolink-rotating-column";
         }
+
+        // Always attach the persistent columns
+        container.appendChild(this.staticColumn);
+        container.appendChild(this.rotatingColumn);
         
-        if (container.children.length === 0) {
-             container.innerHTML = "No devices to display.";
-        }
+        // Populate the columns with the latest data
+        this.updateDisplayContent();
 
         wrapper.appendChild(container);
         return wrapper;
@@ -223,7 +193,7 @@ Module.register("MMM-YoLink", {
             }
 
             this.sensorData = payload;
-            this.updateDom(500);
+            this.updateDom(250); // Redraw the whole module on new data fetch
             this.scheduleRotation();
         } else if (notification === "FETCH_ERROR") {
             this.isLoading = false;
@@ -232,7 +202,43 @@ Module.register("MMM-YoLink", {
         }
     },
     
-    // --- ROTATION LOGIC ---
+    // --- DISPLAY UPDATE & ROTATION LOGIC ---
+    updateDisplayContent: function() {
+        if (!this.staticColumn || !this.rotatingColumn) return;
+
+        const allDevices = Object.values(this.sensorData).filter(device => 
+            this.config.showTypes.includes(device.type) &&
+            !this.config.excludeIds.includes(device.deviceId)
+        );
+
+        const staticDevice = allDevices.find(d => d.deviceId === this.config.staticDeviceId);
+        this.rotatingDevices = allDevices.filter(d => d.deviceId !== this.config.staticDeviceId);
+        
+        // Update static column content
+        this.staticColumn.innerHTML = "";
+        if (staticDevice) {
+            this.staticColumn.appendChild(this.renderDevice(staticDevice));
+        }
+
+        // Update rotating column content
+        this.updateRotatingColumn();
+    },
+    
+    updateRotatingColumn: function() {
+        if (!this.rotatingColumn) return;
+
+        this.rotatingColumn.innerHTML = "";
+        if (this.rotatingDevices.length > 0) {
+            if (this.rotatingIndex >= this.rotatingDevices.length) {
+                this.rotatingIndex = 0;
+            }
+            const currentDevice = this.rotatingDevices[this.rotatingIndex];
+            if (currentDevice) {
+                this.rotatingColumn.appendChild(this.renderDevice(currentDevice));
+            }
+        }
+    },
+
     scheduleRotation: function() {
         if (this.rotationTimer) {
             clearInterval(this.rotationTimer);
@@ -241,7 +247,7 @@ Module.register("MMM-YoLink", {
         if (this.rotatingDevices && this.rotatingDevices.length > 1) {
             this.rotationTimer = setInterval(() => {
                 this.rotatingIndex = (this.rotatingIndex + 1) % this.rotatingDevices.length;
-                this.updateDom(500);
+                this.updateRotatingColumn(); // This only updates the rotating column's content
             }, this.config.rotationInterval);
         }
     },
