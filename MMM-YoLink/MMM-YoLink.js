@@ -2,7 +2,7 @@
  * Module: MMM-YoLink
  *
  * By Gemini
- * Version: 1.10
+ * Version: 1.19
  */
 
 Module.register("MMM-YoLink", {
@@ -12,15 +12,16 @@ Module.register("MMM-YoLink", {
         secretKey: "",
         deviceIds: [],
         updateInterval: 5 * 60 * 1000,
-        header: "YoLink Sensors",
         tempUnit: "C",
         batteryThreshold: 25,
         showTypes: ["THSensor", "LeakSensor", "DoorSensor", "MotionSensor"],
         excludeIds: [],
         staticDeviceId: null,
         rotationInterval: 10 * 1000,
-        // --- ADD v1.10: Option for custom colors ---
-        deviceColors: {} // e.g., { "d88b4c040005efe3": "#ff0000" }
+        deviceColors: {},
+        hotTubDeviceId: null,
+        hotTubTempDrop: 5,
+        debug: false // Set to true in config to show diagnostic info
     },
 
     // --- MODULE STATE ---
@@ -30,24 +31,22 @@ Module.register("MMM-YoLink", {
     rotatingDevices: [],
     rotatingIndex: 0,
     rotationTimer: null,
+    previousTemperatures: {},
 
     // --- MODULE LIFECYCLE METHODS ---
     start: function() {
-        Log.info(`[${this.name}] v1.10: Starting module.`);
+        Log.info(`[${this.name}] v1.19: Starting module.`);
         if (!this.config.uaid || !this.config.secretKey) {
             this.error = "Configuration Error: Please set your uaid and secretKey.";
             this.updateDom();
             return;
         }
+        this.isLoading = true;
         this.sendSocketNotification("START_FETCH", this.config);
     },
 
     getStyles: function() {
         return ["MMM-YoLink.css"];
-    },
-
-    getHeader: function() {
-        return this.config.header;
     },
 
     // --- RENDER METHOD (getDom) ---
@@ -68,21 +67,48 @@ Module.register("MMM-YoLink", {
 
         const container = document.createElement("div");
         container.className = "yolink-container";
+        
+        const allDevices = Object.values(this.sensorData).filter(device => 
+            this.config.showTypes.includes(device.type) &&
+            !this.config.excludeIds.includes(device.deviceId)
+        );
 
-        // Find the static device
-        const staticDevice = this.sensorData[this.config.staticDeviceId];
+        const staticDevice = allDevices.find(d => d.deviceId === this.config.staticDeviceId);
+        this.rotatingDevices = allDevices.filter(d => d.deviceId !== this.config.staticDeviceId);
 
+        // --- ADD v1.19: Diagnostic Debug Mode ---
+        if (this.config.debug) {
+            const debugInfo = document.createElement("div");
+            debugInfo.style.textAlign = 'left';
+            debugInfo.style.border = '1px solid white';
+            debugInfo.style.padding = '5px';
+            debugInfo.style.marginBottom = '10px';
+            debugInfo.innerHTML = `
+                <p style="margin:0; padding:0;">--- MMM-YoLink Debug ---</p>
+                <p style="margin:0; padding:0;">Total devices in sensorData: ${Object.keys(this.sensorData).length}</p>
+                <p style="margin:0; padding:0;">Total devices after filtering: ${allDevices.length}</p>
+                <p style="margin:0; padding:0;">Static device found: ${staticDevice ? staticDevice.name : 'No'}</p>
+                <p style="margin:0; padding:0;">Rotating devices count: ${this.rotatingDevices.length}</p>
+                <p style="margin:0; padding:0;">Current rotating index: ${this.rotatingIndex}</p>
+            `;
+            wrapper.appendChild(debugInfo);
+        }
+
+        // Render the static column
         if (staticDevice) {
             const staticColumn = document.createElement("div");
-            staticColumn.className = "yolink-column";
+            staticColumn.className = "yolink-column yolink-static-column";
             staticColumn.appendChild(this.renderDevice(staticDevice));
             container.appendChild(staticColumn);
         }
-
-        // Render the rotating device if there are any
+        
+        // Render the rotating column
         if (this.rotatingDevices.length > 0) {
             const rotatingColumn = document.createElement("div");
-            rotatingColumn.className = "yolink-column";
+            rotatingColumn.className = "yolink-column yolink-rotating-column";
+            if (this.rotatingIndex >= this.rotatingDevices.length) {
+                this.rotatingIndex = 0;
+            }
             const currentRotatingDevice = this.rotatingDevices[this.rotatingIndex];
             if (currentRotatingDevice) {
                 rotatingColumn.appendChild(this.renderDevice(currentRotatingDevice));
@@ -90,7 +116,7 @@ Module.register("MMM-YoLink", {
             container.appendChild(rotatingColumn);
         }
         
-        if (!staticDevice && this.rotatingDevices.length === 0) {
+        if (container.children.length === 0) {
              container.innerHTML = "No devices to display.";
         }
 
@@ -101,12 +127,10 @@ Module.register("MMM-YoLink", {
     /**
      * @function renderDevice
      * Renders a single device's data into a table.
-     * @param {object} device - The device object from the API.
-     * @returns {HTMLElement} A table element with the device's data.
      */
     renderDevice: function(device) {
         const table = document.createElement("table");
-        table.className = "small";
+        table.className = `small yolink-device-table yolink-type-${device.type}`;
 
         const nameRow = document.createElement("tr");
         const nameCell = document.createElement("td");
@@ -114,23 +138,32 @@ Module.register("MMM-YoLink", {
         nameCell.colSpan = 2;
         nameCell.innerHTML = device.name;
         
-        // *** ADD v1.10: Apply custom color if specified in config ***
-        if (this.config.deviceColors[device.deviceId]) {
+        const isRotating = device.deviceId !== this.config.staticDeviceId;
+        const staticColor = this.config.deviceColors[this.config.staticDeviceId];
+
+        if (isRotating && staticColor) {
+            nameCell.style.color = staticColor;
+        } else if (this.config.deviceColors[device.deviceId]) {
             nameCell.style.color = this.config.deviceColors[device.deviceId];
         }
         
         nameRow.appendChild(nameCell);
         table.appendChild(nameRow);
 
-        if (device.data && device.data.online === false) {
-            this.addStatusRow(table, "Offline");
-            return table;
-        }
-
         const liveData = device.data ? device.data.state : null;
 
         if (liveData && typeof liveData === 'object') {
-            this.addDataRow(table, 'Temperature', liveData.temperature);
+            let tempAlert = false;
+            if (device.deviceId === this.config.hotTubDeviceId) {
+                const currentTemp = liveData.temperature;
+                const previousTemp = this.previousTemperatures[device.deviceId];
+                if (previousTemp !== undefined && currentTemp < previousTemp - this.config.hotTubTempDrop) {
+                    tempAlert = true;
+                    nameCell.classList.add("temp-alert-name");
+                }
+            }
+
+            this.addDataRow(table, 'Temperature', liveData.temperature, tempAlert);
             if (device.modelName !== "YS8008-UC") {
                 this.addDataRow(table, 'Humidity', liveData.humidity);
             }
@@ -160,7 +193,7 @@ Module.register("MMM-YoLink", {
         table.appendChild(row);
     },
 
-    addDataRow: function(table, key, value) {
+    addDataRow: function(table, key, value, isAlert = false) {
         if (value === undefined || value === null) return;
         const row = document.createElement("tr");
         const keyCell = document.createElement("td");
@@ -169,6 +202,9 @@ Module.register("MMM-YoLink", {
         row.appendChild(keyCell);
         const valueCell = document.createElement("td");
         valueCell.className = "stateValue";
+        if (isAlert) {
+            valueCell.classList.add("temp-alert-value");
+        }
         valueCell.innerHTML = this.formatStateValue(key, value);
         row.appendChild(valueCell);
         table.appendChild(row);
@@ -179,17 +215,16 @@ Module.register("MMM-YoLink", {
         if (notification === "SENSOR_DATA") {
             this.isLoading = false;
             this.error = null;
+            
+            for (const deviceId in this.sensorData) {
+                if (this.sensorData[deviceId].data && this.sensorData[deviceId].data.state) {
+                    this.previousTemperatures[deviceId] = this.sensorData[deviceId].data.state.temperature;
+                }
+            }
+
             this.sensorData = payload;
-
-            const allDevices = Object.values(this.sensorData);
-            this.rotatingDevices = allDevices.filter(device => 
-                device.deviceId !== this.config.staticDeviceId &&
-                this.config.showTypes.includes(device.type) &&
-                !this.config.excludeIds.includes(device.deviceId)
-            );
-
-            this.scheduleRotation();
             this.updateDom(500);
+            this.scheduleRotation();
         } else if (notification === "FETCH_ERROR") {
             this.isLoading = false;
             this.error = payload.error;
@@ -202,7 +237,8 @@ Module.register("MMM-YoLink", {
         if (this.rotationTimer) {
             clearInterval(this.rotationTimer);
         }
-        if (this.rotatingDevices.length > 1) {
+        
+        if (this.rotatingDevices && this.rotatingDevices.length > 1) {
             this.rotationTimer = setInterval(() => {
                 this.rotatingIndex = (this.rotatingIndex + 1) % this.rotatingDevices.length;
                 this.updateDom(500);

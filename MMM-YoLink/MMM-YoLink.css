@@ -1,7 +1,11 @@
 /*
  * MMM-YoLink CSS
- * Version 1.1
+ * Version 1.9
  */
+
+.yolink-wrapper {
+  width: 50%;
+}
 
 .yolink-wrapper .deviceName {
   font-weight: bold;
@@ -12,7 +16,7 @@
 .yolink-wrapper .stateKey {
   text-align: left;
   padding-right: 15px;
-  color: #aaa; /* Lighter color for the key */
+  color: #aaa;
 }
 
 .yolink-wrapper .stateValue {
@@ -20,26 +24,58 @@
 }
 
 .yolink-wrapper .state-open {
-    color: #f86573; /* A reddish color for "Open" */
+    color: #f86573;
 }
 
 .yolink-wrapper .state-closed {
-    color: #84f284; /* A greenish color for "Closed" */
+    color: #84f284;
 }
 
 .yolink-wrapper .error {
-  color: #ff8c8c; /* Red for error messages */
+  color: #ff8c8c;
   text-align: center;
 }
 
-/* --- ADD v1.1: Styles for two-column layout --- */
+/* --- EDIT v1.9: Switched from Flexbox to CSS Grid for a more rigid layout --- */
 .yolink-container {
-  display: flex;
+  display: grid;
+  grid-template-columns: 1fr 1fr; /* Create two equal-fraction columns */
   width: 100%;
   gap: 20px; /* Adds space between the columns */
 }
 
+/* The .yolink-column class is no longer needed for width control */
 .yolink-column {
-  flex: 1; /* Each column takes up equal space */
   min-width: 0; /* Prevents columns from overflowing */
+}
+
+
+/* Specific fix for LeakSensor text wrapping */
+.yolink-device-table {
+  table-layout: fixed;
+  width: 100%;
+}
+
+.yolink-type-LeakSensor .stateKey {
+  width: 40%;
+  padding-right: 5px;
+}
+
+.yolink-type-LeakSensor .stateValue {
+  width: 60%;
+}
+
+/* --- Styles for Temperature Alert --- */
+@keyframes flash-alert {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+
+.temp-alert-name {
+  animation: flash-alert 1s infinite;
+}
+
+.temp-alert-value {
+  color: #ff4d4d; /* Bright red for the alert */
+  font-weight: bold;
 }
