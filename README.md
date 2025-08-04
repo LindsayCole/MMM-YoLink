@@ -1,6 +1,6 @@
 # MMM-YoLink - YoLink Sensors on your MagicMirror²!
 
-This is a module for [MagicMirror²](https://magicmirror.builders/) that displays data from your [YoLink](https://www.yosmart.com/) sensors. After a truly epic journey of trial, error, and some fantastic community-led detective work, it finally works!
+This is a module for [MagicMirror²](https://magicmirror.builders/) that displays data from your [YoLink](https://www.yosmart.com/) sensors. After a truly epic journey of trial, error, and some fantastic community-led detective work, it finally works! My entire purpose for this was so that I could see a hot tub if it went into an error state.
 
 ### A Friendly Disclaimer
 
